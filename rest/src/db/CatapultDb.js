@@ -25,7 +25,7 @@ const { convertToLong } = require('./dbUtils');
 const catapult = require('catapult-sdk');
 const MongoDb = require('mongodb');
 
-const { address, EntityType } = catapult.model;
+const { EntityType } = catapult.model;
 const { ObjectId } = MongoDb;
 
 const isAggregateType = document => EntityType.aggregateComplete === document.transaction.type
@@ -85,7 +85,7 @@ const buildBlocksFromOptions = (height, numBlocks, chainHeight) => {
 	return { startHeight, endHeight, numBlocks: endHeight.subtract(startHeight).toNumber() };
 };
 
-const boundPageSize = (pageSize, bounds) => Math.max(bounds.pageSizeMin, Math.min(bounds.pageSizeMax, pageSize));
+const getBoundedPageSize = (pageSize, pagingOptions) => Math.max(pagingOptions.pageSizeMin, Math.min(pagingOptions.pageSizeMax, pageSize));
 
 class CatapultDb {
 	// region construction / connect / disconnect
@@ -95,8 +95,11 @@ class CatapultDb {
 		if (!this.networkId)
 			throw Error('network id is required');
 
-		this.pageSizeMin = options.pageSizeMin || 10;
-		this.pageSizeMax = options.pageSizeMax || 100;
+		this.pagingOptions = {
+			pageSizeMin: options.pageSizeMin || 10,
+			pageSizeMax: options.pageSizeMax || 100,
+			pageSizeDefault: options.pageSizeDefault || 20
+		};
 		this.sanitizer = createSanitizer();
 	}
 
@@ -165,7 +168,7 @@ class CatapultDb {
 		return collection.find(allConditions)
 			.project(options.projection)
 			.sort({ _id: sortOrder })
-			.limit(boundPageSize(pageSize, this))
+			.limit(getBoundedPageSize(pageSize, this.pagingOptions))
 			.toArray();
 	}
 
@@ -304,6 +307,128 @@ class CatapultDb {
 
 					return transactions;
 				});
+			});
+	}
+
+	queryPagedDocuments_2(queryConditions, projection, collectionName, options) {
+		const conditions = [];
+		if (queryConditions.length) {
+			if (1 === queryConditions.length)
+				conditions.push(queryConditions[0]);
+
+			else
+				conditions.push({ $and: queryConditions });
+		}
+		const pageSize = getBoundedPageSize(options.pageSize, this.pagingOptions);
+		const pageIndex = options.pageNumber - 1;
+		conditions.push({
+			$facet: {
+				data: [{ $skip: pageSize * pageIndex }, { $limit: pageSize }],
+				paging: [
+					{ $count: 'totalEntries' },
+					{
+						$addFields: {
+							pageNumber: options.pageNumber,
+							pageSize
+						}
+					}
+				]
+			}
+		});
+
+		const transformedProjection = {};
+		Object.keys(projection).forEach(key => { transformedProjection[`data.${key}`] = projection[key]; });
+
+		return this.database.collection(collectionName)
+			.aggregate(conditions, { promoteLongs: false })
+			.project(transformedProjection)
+			.toArray()
+			.then(result => {
+				const formattedResult = result[0];
+				formattedResult.paging = formattedResult.paging[0];
+				return formattedResult;
+			})
+			.then(result => {
+				result.data.forEach(record => {
+					record.id = record._id;
+					delete record._id;
+				});
+				return result;
+			});
+	}
+
+	transactions(filters, options) {
+		const getCollectionName = (transactionStatus = 'confirmed') => {
+			const collectionNames = {
+				confirmed: 'transactions',
+				unconfirmed: 'unconfirmedTransactions',
+				partial: 'partialTransactions'
+			};
+			return collectionNames[transactionStatus];
+		};
+		const collectionName = getCollectionName(filters.state);
+
+		const getInnerAggregateTransactionIds = accountCondition =>
+			this.database.collection(collectionName)
+				.find({
+					$and: [
+						{ 'meta.aggregateId': { $exists: true } },
+						accountCondition
+					]
+				})
+				.project({ 'meta.aggregateId': 1 })
+				.toArray()
+				.then(transactions => transactions.map(transaction => transaction.meta.aggregateId));
+
+
+		const buildAccountConditions = () => {
+			if (filters.address)
+				return Promise.resolve({ 'meta.addresses': Buffer.from(filters.address) });
+
+			if (filters.signerPublicKey || filters.recipientAddress) {
+				const accountCondition = filters.signerPublicKey
+					? { 'transaction.signerPublicKey': Buffer.from(filters.signerPublicKey) }
+					: { 'transaction.recipientAddress': Buffer.from(filters.recipientAddress) };
+
+				return getInnerAggregateTransactionIds(accountCondition)
+					.then(transactionIds => ({
+						$or: [
+							accountCondition,
+							{ id: { $in: transactionIds } }
+						]
+					}));
+			}
+			return Promise.resolve();
+		};
+
+		const buildConditions = () => {
+			const conditions = [];
+
+			if (filters.height)
+				conditions.push({ 'meta.height': convertToLong(filters.height) });
+
+			if (undefined !== filters.transactionTypes)
+				conditions.push({ 'transaction.type': { $in: filters.transactionTypes } });
+
+			conditions.push({ $sort: { [options.sortField]: -1 } });
+
+			return buildAccountConditions()
+				.then(accountConditions => {
+					if (accountConditions)
+						conditions.push(accountConditions);
+					return conditions;
+				});
+		};
+
+		const queryProjection = {
+			'meta.addresses': 0
+		};
+
+		return buildConditions()
+			.then(conditions =>
+				this.queryPagedDocuments_2(conditions, queryProjection, collectionName, options))
+			.catch(error => {
+				console.log(error);
 			});
 	}
 
@@ -526,7 +651,8 @@ class CatapultDb {
 
 	accountsByIds(ids) {
 		// id will either have address property or publicKey property set; in the case of publicKey, convert it to address
-		const buffers = ids.map(id => Buffer.from((id.publicKey ? address.publicKeyToAddress(id.publicKey, this.networkId) : id.address)));
+		const buffers = ids.map(id => Buffer.from((id.publicKey
+			? catapult.model.address.publicKeyToAddress(id.publicKey, this.networkId) : id.address)));
 		return this.queryDocuments('accounts', { 'account.address': { $in: buffers } })
 			.then(entities => entities.map(accountWithMetadata => {
 				const { account } = accountWithMetadata;

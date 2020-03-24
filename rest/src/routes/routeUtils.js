@@ -128,10 +128,15 @@ const routeUtils = {
 	 * @returns {object} Parsed paging options.
 	 */
 	parsePagingArguments: args => {
-		const parsedOptions = { id: undefined, pageSize: 0 };
+		const parsedOptions = {
+			id: undefined,
+			pageSize: 0,
+			pageNumber: 0
+		};
 		const parsers = {
 			id: { tryParse: str => (isObjectId(str) ? str : undefined), type: 'object id' },
-			pageSize: { tryParse: convert.tryParseUint, type: 'unsigned integer' }
+			pageSize: { tryParse: convert.tryParseUint, type: 'unsigned integer' },
+			pageNumber: { tryParse: convert.tryParseUint, type: 'unsigned integer' }
 		};
 
 		Object.keys(parsedOptions).filter(key => args[key]).forEach(key => {
@@ -194,6 +199,20 @@ const routeUtils = {
 					sendOneObject(object);
 				}
 
+				next();
+			};
+		},
+
+		/**
+		 * Creates a page handler that forwards a paginated result.
+		 * or sends a not found error if no such object exists.
+		 * @param {object} res Restify response object.
+		 * @param {Function} next Restify next callback handler.
+		 * @returns {Function} An appropriate object handler.
+		 */
+		sendPage(res, next) {
+			return page => {
+				res.send({ payload: page, type, structure: 'page' });
 				next();
 			};
 		}

@@ -20,6 +20,7 @@
 
 const routeResultTypes = require('./routeResultTypes');
 const routeUtils = require('./routeUtils');
+const errors = require('../server/errors');
 const catapult = require('catapult-sdk');
 
 const { convert } = catapult.utils;
@@ -31,6 +32,8 @@ const constants = {
 		objectId: 24
 	}
 };
+
+const parseHeight = params => routeUtils.parseArgument(params, 'height', 'uint');
 
 const parseObjectId = str => {
 	if (!convert.isHexString(str))
@@ -68,5 +71,32 @@ module.exports = {
 				throw Error(`invalid length of transaction id '${transactionId}'`);
 			}
 		);
+
+		server.get('/transactions', (req, res, next) => {
+			// TODO: throw error if more than one param provided (signerPk, address, recipientAddress)
+
+			const filters = {
+				height: req.params.height ? parseHeight(req.params) : undefined,
+				address: req.params.height ? routeUtils.parseArgument(req.params, 'address', 'address') : undefined,
+				signerPublicKey: req.params.height ? routeUtils.parseArgument(req.params, 'signerPublicKey', 'publicKey') : undefined,
+				recipientAddress: req.params.height ? routeUtils.parseArgument(req.params, 'recipientAddress', 'address') : undefined,
+				transactionTypes: req.params.type ? routeUtils.parseArgumentAsArray(req.params, 'type', 'uint') : undefined,
+				state: req.params.state
+			};
+
+			const pagingOptions = routeUtils.parsePagingArguments(req.params);
+			const options = {
+				pageSize: pagingOptions.pageSize,
+				pageNumber: pagingOptions.pageNumber ? pagingOptions.pageNumber : 1,
+				sortField: 'id',
+				sortDirection: 'desc' === req.params.order ? -1 : 1
+			};
+
+			return db.transactions(filters, options)
+				.then(result => routeUtils.createSender(routeResultTypes.transaction).sendPage(res, next)(result))
+				.catch(error => {
+					console.log(error);
+				});
+		});
 	}
 };
