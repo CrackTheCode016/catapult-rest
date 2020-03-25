@@ -85,7 +85,8 @@ const buildBlocksFromOptions = (height, numBlocks, chainHeight) => {
 	return { startHeight, endHeight, numBlocks: endHeight.subtract(startHeight).toNumber() };
 };
 
-const getBoundedPageSize = (pageSize, pagingOptions) => Math.max(pagingOptions.pageSizeMin, Math.min(pagingOptions.pageSizeMax, pageSize));
+const getBoundedPageSize = (pageSize, pagingOptions) =>
+	Math.max(pagingOptions.pageSizeMin, Math.min(pagingOptions.pageSizeMax, pageSize || pagingOptions.pageSizeDefault));
 
 class CatapultDb {
 	// region construction / connect / disconnect
@@ -310,15 +311,18 @@ class CatapultDb {
 			});
 	}
 
-	queryPagedDocuments_2(queryConditions, projection, collectionName, options) {
+	queryPagedDocuments_2(queryConditions, projection, sortConditions, collectionName, options) {
 		const conditions = [];
 		if (queryConditions.length) {
 			if (1 === queryConditions.length)
-				conditions.push(queryConditions[0]);
+				conditions.push({ $match: queryConditions[0] });
 
 			else
-				conditions.push({ $and: queryConditions });
+				conditions.push({ $match: { $and: queryConditions } });
 		}
+
+		conditions.push(sortConditions);
+
 		const pageSize = getBoundedPageSize(options.pageSize, this.pagingOptions);
 		const pageIndex = options.pageNumber - 1;
 		conditions.push({
@@ -410,8 +414,6 @@ class CatapultDb {
 			if (undefined !== filters.transactionTypes)
 				conditions.push({ 'transaction.type': { $in: filters.transactionTypes } });
 
-			conditions.push({ $sort: { [options.sortField]: -1 } });
-
 			return buildAccountConditions()
 				.then(accountConditions => {
 					if (accountConditions)
@@ -424,9 +426,11 @@ class CatapultDb {
 			'meta.addresses': 0
 		};
 
+		const sortConditions = { $sort: { [options.sortField]: -1 } };
+
 		return buildConditions()
 			.then(conditions =>
-				this.queryPagedDocuments_2(conditions, queryProjection, collectionName, options))
+				this.queryPagedDocuments_2(conditions, queryProjection, sortConditions, collectionName, options))
 			.catch(error => {
 				console.log(error);
 			});

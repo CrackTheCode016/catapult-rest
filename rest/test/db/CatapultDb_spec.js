@@ -1522,6 +1522,166 @@ describe('catapult db', () => {
 		});
 	});
 
+	describe('transactions', () => {
+		const testPublicKey = {
+			one: test.random.publicKey(),
+			two: test.random.publicKey(),
+			three: test.random.publicKey()
+		};
+		const testAddress = {
+			one: keyToAddress(testPublicKey.one),
+			two: keyToAddress(testPublicKey.two),
+			three: keyToAddress(testPublicKey.three)
+		};
+
+		const { createObjectId } = test.db;
+
+		const createTransaction = (objectId, addresses, height, signerPublicKey, type) => ({
+			_id: createObjectId(objectId),
+			meta: {
+				height,
+				addresses: addresses.map(a => new Binary(a))
+			},
+			transaction: {
+				signerPublicKey,
+				type
+			}
+		});
+
+		const createInnerTransaction = (objectId, aggregateId, signerPublicKey) => ({
+			_id: createObjectId(objectId),
+			meta: { aggregateId: createObjectId(aggregateId) },
+			transaction: { signerPublicKey }
+		});
+
+		it('does not expose private meta.addresses field', () => {
+			// Arrange:
+			const dbTransactions = [
+				createTransaction(10, [testAddress.one], 1, EntityType.transfer),
+				createTransaction(20, [testAddress.two], 1, EntityType.transfer)
+			];
+
+			const filters = {};
+			const options = {};
+
+			// Act + Assert:
+			return runDbTest(
+				{ transactions: dbTransactions },
+				db => db.transactions(filters, options),
+				transactionsPage => {
+					expect(transactionsPage.data.length).to.equal(2);
+					expect(undefined === transactionsPage.data[0].meta.addresses).to.equal(true);
+				}
+			);
+		});
+
+		describe('correctly applies filter:', () => {
+			it('height', () => {
+				// Arrange:
+				const dbTransactions = [
+					createTransaction(10, [], 5),
+					createTransaction(20, [], 10),
+					createTransaction(30, [], 15)
+				];
+
+				const filters = { height: 10 };
+				const options = {};
+
+				// Act + Assert:
+				return runDbTest(
+					{ transactions: dbTransactions },
+					db => db.transactions(filters, options),
+					transactionsPage => {
+						expect(transactionsPage.data.length).to.equal(1);
+						expect(transactionsPage.data[0].id).to.deep.equal(createObjectId(20));
+					}
+				);
+			});
+
+			it('address', () => {
+				// Arrange:
+				const dbTransactions = [
+					createTransaction(10, [testAddress.one], 1),
+					createTransaction(20, [testAddress.two], 1),
+					createTransaction(30, [testAddress.three], 1),
+					createTransaction(40, [testAddress.two, testAddress.one], 1),
+					createTransaction(50, [testAddress.three, testAddress.one], 1)
+				];
+
+				const filters = { address: testAddress.one };
+				const options = {};
+
+				// Act + Assert:
+				return runDbTest(
+					{ transactions: dbTransactions },
+					db => db.transactions(filters, options),
+					transactionsPage => {
+						expect(transactionsPage.data.length).to.equal(3);
+						const expectedIds = [createObjectId(10), createObjectId(40), createObjectId(50)];
+						const returnedIds = transactionsPage.data.map(t => t.id);
+						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
+					}
+				);
+			});
+
+			it('signerPublicKey', () => {
+				// Arrange:
+				const dbTransactions = [
+					// Non aggregate
+					createTransaction(createObjectId(10), [], 1, testPublicKey.one),
+					createTransaction(createObjectId(20), [], 1, testPublicKey.two),
+
+					// Aggregate
+					createTransaction(createObjectId(30), [], 1, testPublicKey.one),
+					createInnerTransaction(createObjectId(100), createObjectId(30), testPublicKey.two),
+					createInnerTransaction(createObjectId(200), createObjectId(30), testPublicKey.two),
+
+					createTransaction(createObjectId(40), [], 1, testPublicKey.two),
+					createInnerTransaction(createObjectId(300), createObjectId(40), testPublicKey.one),
+					createInnerTransaction(createObjectId(400), createObjectId(40), testPublicKey.two),
+
+					createTransaction(createObjectId(50), [], 1, testPublicKey.two),
+					createInnerTransaction(createObjectId(500), createObjectId(50), testPublicKey.two)
+				];
+
+				const filters = { signerPublicKey: testPublicKey.one };
+				const options = {};
+
+				// Act + Assert:
+				return runDbTest(
+					{ transactions: dbTransactions },
+					db => db.transactions(filters, options),
+					transactionsPage => {
+
+						console.log(transactionsPage.data);
+
+						expect(transactionsPage.data.length).to.equal(3);
+						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(40)];
+						console.log(expectedIds);
+						const returnedIds = transactionsPage.data.map(t => t.id);
+						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
+					}
+				);
+			});
+
+			/*
+			it('recipientAddress', () => {
+				expect(1).to.equal(0);
+			});
+
+			it('transactionTypes', () => {
+				expect(1).to.equal(0);
+			});
+
+			it('state', () => {
+				expect(1).to.equal(0);
+			});
+			*/
+		});
+
+		describe('correctly uses option', () => {});
+	});
+
 	describe('account get', () => {
 		const publicKey = test.random.publicKey();
 		const decodedAddress = keyToAddress(publicKey);
