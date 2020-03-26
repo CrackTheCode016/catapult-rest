@@ -1536,7 +1536,7 @@ describe('catapult db', () => {
 
 		const { createObjectId } = test.db;
 
-		const createTransaction = (objectId, addresses, height, signerPublicKey, type) => ({
+		const createTransaction = (objectId, addresses, height, signerPublicKey, recipientAddress, type) => ({
 			_id: createObjectId(objectId),
 			meta: {
 				height,
@@ -1544,32 +1544,50 @@ describe('catapult db', () => {
 			},
 			transaction: {
 				signerPublicKey,
+				recipientAddress,
 				type
 			}
 		});
 
-		const createInnerTransaction = (objectId, aggregateId, signerPublicKey) => ({
+		const createInnerTransaction = (objectId, aggregateId, signerPublicKey, recipientAddress, type) => ({
 			_id: createObjectId(objectId),
 			meta: { aggregateId: createObjectId(aggregateId) },
-			transaction: { signerPublicKey }
+			transaction: {
+				signerPublicKey,
+				recipientAddress,
+				type
+			}
+		});
+
+		it('returns expected structure', () => {
+			// Arrange:
+			const dbTransactions = [
+				createTransaction(10, [testAddress.one], 123, testPublicKey.one, testAddress.two, EntityType.transfer)
+			];
+
+			// Act + Assert:
+			return runDbTest(
+				{ transactions: dbTransactions },
+				db => db.transactions({}, {}),
+				transactionsPage => {
+					const expected_keys = ['meta', 'transaction', 'id'];
+					expect(Object.keys(transactionsPage.data[0]).sort()).to.deep.equal(expected_keys.sort());
+				}
+			);
 		});
 
 		it('does not expose private meta.addresses field', () => {
 			// Arrange:
 			const dbTransactions = [
-				createTransaction(10, [testAddress.one], 1, EntityType.transfer),
-				createTransaction(20, [testAddress.two], 1, EntityType.transfer)
+				createTransaction(10, [testAddress.one], 1, 0, 0, 0)
 			];
-
-			const filters = {};
-			const options = {};
 
 			// Act + Assert:
 			return runDbTest(
 				{ transactions: dbTransactions },
-				db => db.transactions(filters, options),
+				db => db.transactions({}, {}),
 				transactionsPage => {
-					expect(transactionsPage.data.length).to.equal(2);
+					expect(transactionsPage.data.length).to.equal(1);
 					expect(undefined === transactionsPage.data[0].meta.addresses).to.equal(true);
 				}
 			);
@@ -1585,12 +1603,11 @@ describe('catapult db', () => {
 				];
 
 				const filters = { height: 10 };
-				const options = {};
 
 				// Act + Assert:
 				return runDbTest(
 					{ transactions: dbTransactions },
-					db => db.transactions(filters, options),
+					db => db.transactions(filters, {}),
 					transactionsPage => {
 						expect(transactionsPage.data.length).to.equal(1);
 						expect(transactionsPage.data[0].id).to.deep.equal(createObjectId(20));
@@ -1609,12 +1626,11 @@ describe('catapult db', () => {
 				];
 
 				const filters = { address: testAddress.one };
-				const options = {};
 
 				// Act + Assert:
 				return runDbTest(
 					{ transactions: dbTransactions },
-					db => db.transactions(filters, options),
+					db => db.transactions(filters, {}),
 					transactionsPage => {
 						expect(transactionsPage.data.length).to.equal(3);
 						const expectedIds = [createObjectId(10), createObjectId(40), createObjectId(50)];
@@ -1645,41 +1661,127 @@ describe('catapult db', () => {
 				];
 
 				const filters = { signerPublicKey: testPublicKey.one };
-				const options = {};
 
 				// Act + Assert:
 				return runDbTest(
 					{ transactions: dbTransactions },
-					db => db.transactions(filters, options),
+					db => db.transactions(filters, {}),
 					transactionsPage => {
-
-						console.log(transactionsPage.data);
-
 						expect(transactionsPage.data.length).to.equal(3);
-						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(40)];
-						console.log(expectedIds);
+						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(300)];
 						const returnedIds = transactionsPage.data.map(t => t.id);
 						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
 					}
 				);
 			});
 
-			/*
 			it('recipientAddress', () => {
-				expect(1).to.equal(0);
+				// Arrange:
+				const dbTransactions = [
+					// Non aggregate
+					createTransaction(createObjectId(10), [], 1, 0, testAddress.one),
+					createTransaction(createObjectId(20), [], 1, 0, testAddress.two),
+
+					// Aggregate
+					createTransaction(createObjectId(30), [], 1, 0, testAddress.one),
+					createInnerTransaction(createObjectId(100), createObjectId(30), 0, testAddress.two),
+					createInnerTransaction(createObjectId(200), createObjectId(30), 0, testAddress.two),
+
+					createTransaction(createObjectId(40), [], 1, 0, testAddress.two),
+					createInnerTransaction(createObjectId(300), createObjectId(40), 0, testAddress.one),
+					createInnerTransaction(createObjectId(400), createObjectId(40), 0, testAddress.two),
+
+					createTransaction(createObjectId(50), [], 1, 0, testAddress.two),
+					createInnerTransaction(createObjectId(500), createObjectId(50), 0, testAddress.two)
+				];
+
+				const filters = { recipientAddress: testAddress.one };
+
+				// Act + Assert:
+				return runDbTest(
+					{ transactions: dbTransactions },
+					db => db.transactions(filters, {}),
+					transactionsPage => {
+						expect(transactionsPage.data.length).to.equal(3);
+						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(300)];
+						const returnedIds = transactionsPage.data.map(t => t.id);
+						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
+					}
+				);
 			});
 
 			it('transactionTypes', () => {
-				expect(1).to.equal(0);
+				// Arrange:
+				const dbTransactions = [
+					// Non aggregate
+					createTransaction(createObjectId(10), [], 1, 0, 0, EntityType.transfer),
+					createTransaction(createObjectId(20), [], 1, 0, 0, EntityType.accountLink),
+
+					// Aggregate
+					createTransaction(createObjectId(30), [], 1, 0, 0, EntityType.aggregateComplete),
+					createInnerTransaction(createObjectId(100), createObjectId(30), 0, 0, EntityType.mosaicDefinition),
+					createInnerTransaction(createObjectId(200), createObjectId(30), 0, 0, EntityType.mosaicSupplyChange),
+
+					createTransaction(createObjectId(40), [], 1, 0, 0, EntityType.aggregateBonded),
+					createInnerTransaction(createObjectId(300), createObjectId(40), 0, 0, EntityType.transfer),
+					createInnerTransaction(createObjectId(400), createObjectId(40), 0, 0, EntityType.transfer),
+
+					createTransaction(createObjectId(50), [], 1, 0, 0, EntityType.aggregateBonded),
+					createInnerTransaction(createObjectId(500), createObjectId(50), 0, 0, EntityType.registerNamespace),
+					createInnerTransaction(createObjectId(600), createObjectId(50), 0, 0, EntityType.aliasAddress)
+				];
+
+				const filters = { transactionTypes: [EntityType.mosaicDefinition, EntityType.transfer] };
+
+				// Act + Assert:
+				return runDbTest(
+					{ transactions: dbTransactions },
+					db => db.transactions(filters, {}),
+					transactionsPage => {
+						expect(transactionsPage.data.length).to.equal(4);
+						const expectedIds = [
+							createObjectId(10),
+							createObjectId(100),
+							createObjectId(300),
+							createObjectId(400)
+						];
+						const returnedIds = transactionsPage.data.map(t => t.id);
+						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
+					}
+				);
 			});
 
 			it('state', () => {
-				expect(1).to.equal(0);
-			});
-			*/
-		});
+				// Arrange:
+				const dbConfirmedTransactions = [
+					createTransaction(createObjectId(10), [], 1)
+				];
+				const dbPartialTransactions = [
+					createTransaction(createObjectId(20), [], 1)
+				];
+				const dbUnconfirmedTransactions = [
+					createTransaction(createObjectId(30), [], 1)
+				];
 
-		describe('correctly uses option', () => {});
+				const filters = { state: 'partial' };
+
+				// Act + Assert:
+				return runDbTest(
+					{
+						transactions: dbConfirmedTransactions,
+						partialTransactions: dbPartialTransactions,
+						unconfirmedTransactions: dbUnconfirmedTransactions
+					},
+					db => db.transactions(filters, {}),
+					transactionsPage => {
+						expect(transactionsPage.data.length).to.equal(1);
+						const expectedIds = [createObjectId(20)];
+						const returnedIds = transactionsPage.data.map(t => t.id);
+						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
+					}
+				);
+			});
+		});
 	});
 
 	describe('account get', () => {
