@@ -195,7 +195,7 @@ describe('route utils', () => {
 			const options = routeUtils.parsePagingArguments({});
 
 			// Assert:
-			expect(options).to.deep.equal({ id: undefined, pageSize: 0 });
+			expect(options).to.deep.equal({ id: undefined, pageSize: 0, pageNumber: 0 });
 		});
 
 		it('succeeds when valid id is provided', () => {
@@ -203,7 +203,7 @@ describe('route utils', () => {
 			const options = routeUtils.parsePagingArguments({ id: '112233445566778899AABBCC' });
 
 			// Assert:
-			expect(options).to.deep.equal({ id: '112233445566778899AABBCC', pageSize: 0 });
+			expect(options).to.deep.equal({ id: '112233445566778899AABBCC', pageSize: 0, pageNumber: 0 });
 		});
 
 		it('succeeds when valid page size is provided', () => {
@@ -211,15 +211,23 @@ describe('route utils', () => {
 			const options = routeUtils.parsePagingArguments({ pageSize: '12' });
 
 			// Assert:
-			expect(options).to.deep.equal({ id: undefined, pageSize: 12 });
+			expect(options).to.deep.equal({ id: undefined, pageSize: 12, pageNumber: 0 });
 		});
 
-		it('succeeds when valid id and page size are provided', () => {
+		it('succeeds when valid page number is provided', () => {
 			// Act:
-			const options = routeUtils.parsePagingArguments({ id: '112233445566778899AABBCC', pageSize: '12' });
+			const options = routeUtils.parsePagingArguments({ pageNumber: '5' });
 
 			// Assert:
-			expect(options).to.deep.equal({ id: '112233445566778899AABBCC', pageSize: 12 });
+			expect(options).to.deep.equal({ id: undefined, pageSize: 0, pageNumber: 5 });
+		});
+
+		it('succeeds when valid id and page size and page number are provided', () => {
+			// Act:
+			const options = routeUtils.parsePagingArguments({ id: '112233445566778899AABBCC', pageSize: '12', pageNumber: '5' });
+
+			// Assert:
+			expect(options).to.deep.equal({ id: '112233445566778899AABBCC', pageSize: 12, pageNumber: 5 });
 		});
 
 		it('fails when invalid id is provided', () => {
@@ -234,6 +242,12 @@ describe('route utils', () => {
 			// Act:
 			expect(() => routeUtils.parsePagingArguments({ id: '112233445566778899AABBCC', pageSize: '1Y2' }))
 				.to.throw('pageSize is not a valid unsigned integer');
+		});
+
+		it('fails when invalid page number is provided', () => {
+			// Act:
+			expect(() => routeUtils.parsePagingArguments({ id: '112233445566778899AABBCC', pageSize: '10', pageNumber: '12aa' }))
+				.to.throw('pageNumber is not a valid unsigned integer');
 		});
 	});
 
