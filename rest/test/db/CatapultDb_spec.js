@@ -1512,12 +1512,12 @@ describe('catapult db', () => {
 		it('query respects page size', () => runPageSizeTests(50, 25, 25));
 
 		it('query ensures minimum page size', () => {
-			const minPageSize = new CatapultDb({ networkId: Mijin_Test_Network }).pageSizeMin;
+			const minPageSize = new CatapultDb({ networkId: Mijin_Test_Network }).pagingOptions.pageSizeMin;
 			return runPageSizeTests(minPageSize + 5, minPageSize - 1, minPageSize);
 		});
 
 		it('query ensures maximum page size', () => {
-			const maxPageSize = new CatapultDb({ networkId: Mijin_Test_Network }).pageSizeMax;
+			const maxPageSize = new CatapultDb({ networkId: Mijin_Test_Network }).pagingOptions.pageSizeMax;
 			return runPageSizeTests(maxPageSize + 5, maxPageSize + 1, maxPageSize);
 		});
 	});
