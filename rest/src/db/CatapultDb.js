@@ -325,9 +325,18 @@ class CatapultDb {
 
 		const pageSize = getBoundedPageSize(options.pageSize, this.pagingOptions);
 		const pageIndex = options.pageNumber - 1;
+
+		const facet = [
+			{ $skip: pageSize * pageIndex },
+			{ $limit: pageSize }
+		];
+
+		if (0 < Object.keys(projection).length)
+			facet.push({ $project: projection });
+
 		conditions.push({
 			$facet: {
-				data: [{ $skip: pageSize * pageIndex }, { $limit: pageSize }],
+				data: facet,
 				paging: [
 					{ $count: 'totalEntries' },
 					{
@@ -340,12 +349,8 @@ class CatapultDb {
 			}
 		});
 
-		const transformedProjection = {};
-		Object.keys(projection).forEach(key => { transformedProjection[`data.${key}`] = projection[key]; });
-
 		return this.database.collection(collectionName)
 			.aggregate(conditions, { promoteLongs: false })
-			.project(transformedProjection)
 			.toArray()
 			.then(result => {
 				const formattedResult = result[0];

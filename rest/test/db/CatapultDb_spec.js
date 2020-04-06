@@ -1522,6 +1522,287 @@ describe('catapult db', () => {
 		});
 	});
 
+	describe('queryPagedDocuments 2', () => {
+		const testPublicKey = {
+			one: test.random.publicKey(),
+			two: test.random.publicKey()
+		};
+		const testAddress = {
+			one: keyToAddress(testPublicKey.one),
+			two: keyToAddress(testPublicKey.two)
+		};
+		const { createObjectId } = test.db;
+
+		describe('respects query conditions', () => {
+			// Arrange:
+			const accounts = () => ([
+				{ _id: createObjectId(10), account: { address: testAddress.one, addressHeight: 10 } },
+				{ _id: createObjectId(20), account: { address: testAddress.two, addressHeight: 20 } },
+				{ _id: createObjectId(30), account: { address: testAddress.two, addressHeight: 30 } }
+			]);
+
+			it('one condition', () => {
+				const conditions = [{ 'account.addressHeight': 20 }];
+				const sortConditions = { $sort: { _id: -1 } };
+				const options = { pageSize: 10, pageNumber: 1 };
+
+				// Act + Assert:
+				return runDbTest(
+					{ accounts: accounts() },
+					db => db.queryPagedDocuments_2(conditions, {}, sortConditions, 'accounts', options),
+					page => {
+						expect(page.data.length).to.equal(1);
+						expect(page.data[0].id).to.deep.equal(createObjectId(20));
+					}
+				);
+			});
+
+			it('multiple conditions', () => {
+				const conditions = [
+					{ 'account.address': testAddress.two },
+					{ 'account.addressHeight': { $gte: 20 } }
+				];
+				const sortConditions = { $sort: { _id: -1 } };
+				const options = { pageSize: 10, pageNumber: 1 };
+
+				// Act + Assert:
+				return runDbTest(
+					{ accounts: accounts() },
+					db => db.queryPagedDocuments_2(conditions, {}, sortConditions, 'accounts', options),
+					page => {
+						expect(page.data.length).to.equal(2);
+						expect(page.data[0].id).to.deep.equal(createObjectId(30));
+						expect(page.data[1].id).to.deep.equal(createObjectId(20));
+					}
+				);
+			});
+		});
+
+		describe('applies projection', () => {
+			// Arrange:
+			const blocks = () => ([
+				{
+					_id: createObjectId(10),
+					meta: {
+						hash: 0x0100,
+						numTransactions: 10
+					},
+					block: {
+						version: 1,
+						type: 2
+					}
+				}
+			]);
+
+			it('exclusion', () => {
+				const projection = { 'meta.hash': 0, 'block.version': 0 };
+				const sortConditions = { $sort: { _id: -1 } };
+				const options = { pageSize: 10, pageNumber: 1 };
+
+				// Act + Assert:
+				return runDbTest(
+					{ blocks: blocks() },
+					db => db.queryPagedDocuments_2([], projection, sortConditions, 'blocks', options),
+					page => {
+						expect(page.data.length).to.equal(1);
+						expect(page.data[0]).to.deep.equal({
+							id: createObjectId(10),
+							meta: { numTransactions: 10 },
+							block: { type: 2 }
+						});
+					}
+				);
+			});
+
+			it('inclusion', () => {
+				const projection = { 'meta.hash': 1 };
+				const sortConditions = { $sort: { _id: -1 } };
+				const options = { pageSize: 10, pageNumber: 1 };
+
+				// Act + Assert:
+				return runDbTest(
+					{ blocks: blocks() },
+					db => db.queryPagedDocuments_2([], projection, sortConditions, 'blocks', options),
+					page => {
+						expect(page.data.length).to.equal(1);
+						expect(page.data[0]).to.deep.equal({
+							id: createObjectId(10),
+							meta: { hash: 0x0100 }
+						});
+					}
+				);
+			});
+		});
+
+		describe('respects sort conditions', () => {
+			// Arrange:
+			const blocks = () => ([
+				{ _id: createObjectId(10), meta: { numTransactions: 1 }, block: { version: 3, type: 2 } },
+				{ _id: createObjectId(20), meta: { numTransactions: 2 }, block: { version: 2, type: 1 } },
+				{ _id: createObjectId(30), meta: { numTransactions: 3 }, block: { version: 1, type: 3 } }
+			]);
+
+			it('direction ascending', () => {
+				const sortConditions = { $sort: { 'meta.numTransactions': 1 } };
+				const options = { pageSize: 10, pageNumber: 1 };
+
+				// Act + Assert:
+				return runDbTest(
+					{ blocks: blocks() },
+					db => db.queryPagedDocuments_2([], {}, sortConditions, 'blocks', options),
+					page => {
+						expect(page.data.length).to.equal(3);
+						expect(page.data[0].id).to.deep.equal(createObjectId(10));
+						expect(page.data[1].id).to.deep.equal(createObjectId(20));
+						expect(page.data[2].id).to.deep.equal(createObjectId(30));
+					}
+				);
+			});
+
+			it('direction descending', () => {
+				const sortConditions = { $sort: { 'meta.numTransactions': -1 } };
+				const options = { pageSize: 10, pageNumber: 1 };
+
+				// Act + Assert:
+				return runDbTest(
+					{ blocks: blocks() },
+					db => db.queryPagedDocuments_2([], {}, sortConditions, 'blocks', options),
+					page => {
+						expect(page.data.length).to.equal(3);
+						expect(page.data[0].id).to.deep.equal(createObjectId(30));
+						expect(page.data[1].id).to.deep.equal(createObjectId(20));
+						expect(page.data[2].id).to.deep.equal(createObjectId(10));
+					}
+				);
+			});
+
+			it('sort field', () => {
+				const sortConditions = { $sort: { 'block.type': 1 } };
+				const options = { pageSize: 10, pageNumber: 1 };
+
+				// Act + Assert:
+				return runDbTest(
+					{ blocks: blocks() },
+					db => db.queryPagedDocuments_2([], {}, sortConditions, 'blocks', options),
+					page => {
+						expect(page.data.length).to.equal(3);
+						expect(page.data[0].id).to.deep.equal(createObjectId(20));
+						expect(page.data[1].id).to.deep.equal(createObjectId(10));
+						expect(page.data[2].id).to.deep.equal(createObjectId(30));
+					}
+				);
+			});
+		});
+
+		describe('uses correct collection', () => {
+			// Arrange:
+			const accounts = () => ([
+				{ _id: createObjectId(10), account: { address: testAddress.one, addressHeight: 10 } }
+			]);
+			const blocks = () => ([
+				{ _id: createObjectId(20), meta: { numTransactions: 1 }, block: { version: 3, type: 2 } }
+			]);
+			const transactions = () => ([
+				{ _id: createObjectId(30), meta: { height: 1 }, transaction: { type: 3 } }
+			]);
+
+			const runCollectionTest = (collectionName, objectId) => {
+				it(`respects collection: ${collectionName}`, () => {
+					const sortConditions = { $sort: { _id: 1 } };
+					const options = { pageSize: 10, pageNumber: 1 };
+
+					// Act + Assert:
+					return runDbTest(
+						{ accounts: accounts(), blocks: blocks(), transactions: transactions() },
+						db => db.queryPagedDocuments_2([], {}, sortConditions, collectionName, options),
+						page => {
+							expect(page.data.length).to.equal(1);
+							expect(page.data[0].id).to.deep.equal(createObjectId(objectId));
+						}
+					);
+				});
+			};
+
+			[
+				{ collectionName: 'accounts', id: 10 },
+				{ collectionName: 'blocks', id: 20 },
+				{ collectionName: 'transactions', id: 30 }
+			].forEach(testCase => {
+				runCollectionTest(testCase.collectionName, testCase.id);
+			});
+		});
+
+		describe('options', () => {
+			const testDb = new CatapultDb({ networkId: Mijin_Test_Network });
+			const { pageSizeMax, pageSizeMin, pageSizeDefault } = testDb.pagingOptions;
+
+			const blocks = numBlocks => {
+				const resultBlocks = [];
+				for (let i = 0; numBlocks > i; i++)
+					resultBlocks.push({ _id: createObjectId(i), meta: { hash: 0x0100 }, block: { type: 1 } });
+
+				return resultBlocks;
+			};
+
+			describe('respects page size', () => {
+				const runPageSizeTest = (description, pageSize, expectedNumberOfElements) => {
+					it(`page size: ${pageSize} (${description})`, () => {
+						const options = { pageSize, pageNumber: 1 };
+
+						// Act + Assert:
+						return runDbTest(
+							{ blocks: blocks(pageSizeMax + 10) },
+							db => db.queryPagedDocuments_2([], {}, { $sort: { _id: 1 } }, 'blocks', options),
+							page => {
+								expect(page.data.length).to.equal(expectedNumberOfElements);
+								page.data.forEach((element, i) => {
+									expect(element.id).to.deep.equal(createObjectId(i));
+								});
+								expect(page.paging).to.deep.equal({
+									totalEntries: pageSizeMax + 10, pageNumber: 1, pageSize: expectedNumberOfElements
+								});
+							}
+						);
+					});
+				};
+
+				runPageSizeTest('zero', 0, pageSizeDefault);
+				runPageSizeTest('minimum - 1', pageSizeMin - 1, pageSizeMin);
+				runPageSizeTest('standard', 25, 25);
+				runPageSizeTest('maximum + 1', pageSizeMax + 1, pageSizeMax);
+			});
+
+			describe('respects page number', () => {
+				const runPageNumberTest = (pageNumber, expectedNumberOfElements) => {
+					it(`page number: ${pageNumber}`, () => {
+						const options = { pageSize: 10, pageNumber };
+
+						// Act + Assert:
+						return runDbTest(
+							{ blocks: blocks(32) },
+							db => db.queryPagedDocuments_2([], {}, { $sort: { _id: 1 } }, 'blocks', options),
+							page => {
+								expect(page.data.length).to.equal(expectedNumberOfElements);
+								page.data.forEach((element, i) => {
+									expect(element.id).to.deep.equal(createObjectId(((pageNumber - 1) * 10) + i));
+								});
+								expect(page.paging).to.deep.equal({
+									totalEntries: 32, pageNumber, pageSize: 10
+								});
+							}
+						);
+					});
+				};
+
+				runPageNumberTest(1, 10);
+				runPageNumberTest(2, 10);
+				runPageNumberTest(3, 10);
+				runPageNumberTest(4, 2);
+				runPageNumberTest(5, 0);
+			});
+		});
+	});
+
 	describe('transactions', () => {
 		const testPublicKey = {
 			one: test.random.publicKey(),
