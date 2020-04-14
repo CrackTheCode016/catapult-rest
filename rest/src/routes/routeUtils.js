@@ -149,6 +149,25 @@ const routeUtils = {
 		return parsedOptions;
 	},
 
+	parsePaginationArguments: args => {
+		const parsedOptions = {
+			pageSize: args.pageSize,
+			pageNumber: args.pageNumber,
+			sortField: 'id',
+			sortDirection: 'desc' === args.order ? -1 : 1
+		};
+
+		parsedOptions.parsedPageSize = convert.tryParseUint();
+		if (!parsedOptions.parsedPageSize)
+			throw errors.createInvalidArgumentError('pageSize is not a valid unsigned integer');
+
+		parsedOptions.parsedPageNumber = convert.tryParseUint();
+		if (!parsedOptions.parsedPageNumber)
+			throw errors.createInvalidArgumentError('pageNumber is not a valid unsigned integer');
+
+		return parsedOptions;
+	},
+
 	/**
 	 * Creates a sender for forwarding one or more objects of a given type.
 	 * @param {module:routes/routeResultTypes} type Object type.

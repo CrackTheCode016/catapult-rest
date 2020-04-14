@@ -366,6 +366,12 @@ class CatapultDb {
 			});
 	}
 
+	/**
+	 * Retrieves filtered and paginated transactions.
+	 * @param {object} filters Filters to be applied.
+	 * @param {object} options Options such as ordering and pagination.
+	 * @returns {Promise.<array>} Transactions.
+	 */
 	transactions(filters, options) {
 		const getCollectionName = (transactionStatus = 'confirmed') => {
 			const collectionNames = {
@@ -394,16 +400,22 @@ class CatapultDb {
 			if (filters.address)
 				return Promise.resolve({ 'meta.addresses': Buffer.from(filters.address) });
 
-			if (filters.signerPublicKey || filters.recipientAddress) {
-				const accountCondition = filters.signerPublicKey
-					? { 'transaction.signerPublicKey': Buffer.from(filters.signerPublicKey) }
-					: { 'transaction.recipientAddress': Buffer.from(filters.recipientAddress) };
+			let accountConditions = {};
+			if (filters.signerPublicKey)
+				accountConditions['transaction.signerPublicKey'] = Buffer.from(filters.signerPublicKey);
 
-				return getInnerAggregateTransactionIds(accountCondition)
+			if (filters.recipientAddress)
+				accountConditions['transaction.recipientAddress'] = Buffer.from(filters.recipientAddress);
+
+			if (Object.keys(accountConditions).length) {
+				if (1 < Object.keys(accountConditions).length)
+					accountConditions = { $and: accountConditions };
+
+				return getInnerAggregateTransactionIds(accountConditions)
 					.then(transactionIds => ({
 						$or: [
-							accountCondition,
-							{ id: { $in: transactionIds } }
+							accountConditions,
+							{ _id: { $in: transactionIds } }
 						]
 					}));
 			}
@@ -434,11 +446,7 @@ class CatapultDb {
 		const sortConditions = { $sort: { [options.sortField]: -1 } };
 
 		return buildConditions()
-			.then(conditions =>
-				this.queryPagedDocuments_2(conditions, queryProjection, sortConditions, collectionName, options))
-			.catch(error => {
-				console.log(error);
-			});
+			.then(conditions => this.queryPagedDocuments_2(conditions, queryProjection, sortConditions, collectionName, options));
 	}
 
 	/**

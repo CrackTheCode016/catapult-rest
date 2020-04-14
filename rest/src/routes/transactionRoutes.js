@@ -20,7 +20,6 @@
 
 const routeResultTypes = require('./routeResultTypes');
 const routeUtils = require('./routeUtils');
-const errors = require('../server/errors');
 const catapult = require('catapult-sdk');
 
 const { convert } = catapult.utils;
@@ -73,7 +72,11 @@ module.exports = {
 		);
 
 		server.get('/transactions', (req, res, next) => {
-			// TODO: throw error if more than one param provided (signerPk, address, recipientAddress)
+			if (req.params.address && (req.params.signerPublicKey || req.params.recipientAddress))
+				throw Error('can\'t filter by address if signerPublicKey or recipientAddress are already provided');
+
+			if (req.params.state && !['confirmed', 'unconfirmed', 'partial'].includes(req.params.state))
+				throw Error('invalid transaction state provided');
 
 			const filters = {
 				height: req.params.height ? parseHeight(req.params) : undefined,
@@ -84,19 +87,10 @@ module.exports = {
 				state: req.params.state
 			};
 
-			const pagingOptions = routeUtils.parsePagingArguments(req.params);
-			const options = {
-				pageSize: pagingOptions.pageSize,
-				pageNumber: pagingOptions.pageNumber ? pagingOptions.pageNumber : 1,
-				sortField: 'id',
-				sortDirection: 'desc' === req.params.order ? -1 : 1
-			};
+			const options = routeUtils.parsePaginationArguments(req.params);
 
 			return db.transactions(filters, options)
-				.then(result => routeUtils.createSender(routeResultTypes.transaction).sendPage(res, next)(result))
-				.catch(error => {
-					console.log(error);
-				});
+				.then(result => routeUtils.createSender(routeResultTypes.transaction).sendPage(res, next)(result));
 		});
 	}
 };

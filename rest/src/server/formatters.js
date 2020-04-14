@@ -33,7 +33,7 @@ const formatBody = (modelFormatter, body) => {
 			return formatPage(modelFormatter[type], payload);
 
 		return modelFormatter[type].format(payload);
-	}
+	};
 
 	let view = body;
 	let statusCode;
