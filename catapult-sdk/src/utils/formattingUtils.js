@@ -36,7 +36,7 @@ const formattingUtils = {
 	/**
 	 * Formats all the entities in a page.
 	 * @param {module:utils/schemaFormatter~EntityFormatter} formatter Formatter.
-	 * @param {object} object Page.
+	 * @param {object} collection Collection.
 	 * @returns {object} A new object of formatted page.
 	 */
 	formatPage: (formatter, collection) => {
