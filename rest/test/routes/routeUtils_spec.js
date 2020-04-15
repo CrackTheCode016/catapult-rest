@@ -308,7 +308,7 @@ describe('route utils', () => {
 
 		it('succeeds when valid sort direction is provided', () => {
 			// Act:
-			const options = routeUtils.parsePaginationArguments({ sortDirection: 'desc' });
+			const options = routeUtils.parsePaginationArguments({ order: 'desc' });
 
 			// Assert:
 			expect(options).to.deep.equal({
@@ -338,7 +338,7 @@ describe('route utils', () => {
 				pageSize: '12',
 				pageNumber: '5',
 				sortField: 'signerPublicKey',
-				sortDirection: 'desc'
+				order: 'desc'
 			});
 
 			// Assert:
