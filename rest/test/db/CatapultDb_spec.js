@@ -1874,7 +1874,73 @@ describe('catapult db', () => {
 			);
 		});
 
-		describe('correctly applies filter:', () => {
+		it('if address is provided signerPublicKey and recipientAddress are omitted', () => {
+			// Arrange:
+			const dbTransactions = [
+				createTransaction(10, [testAddress.one], 1),
+				createTransaction(20, [testAddress.one], 1, testPublicKey.one),
+				createTransaction(30, [testAddress.one], 1, testPublicKey.two),
+				createTransaction(40, [testAddress.one], 1, testPublicKey.one, testAddress.one),
+				createTransaction(50, [testAddress.one], 1, testPublicKey.two, testAddress.two),
+				createTransaction(60, [testAddress.two], 1)
+			];
+
+			const filters = {
+				address: testAddress.one,
+				signerPublicKey: testPublicKey.one,
+				recipientAddress: testAddress.one
+			};
+
+			// Act + Assert:
+			return runDbTest(
+				{ transactions: dbTransactions },
+				db => db.transactions(filters, {}),
+				transactionsPage => {
+					expect(transactionsPage.data.length).to.equal(5);
+					const expectedIds = [
+						createObjectId(10),
+						createObjectId(20),
+						createObjectId(30),
+						createObjectId(40),
+						createObjectId(50)
+					];
+					const returnedIds = transactionsPage.data.map(t => t.id);
+					expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
+				}
+			);
+		});
+
+		it('it allows multiple filters, always AND conditions', () => {
+			// Arrange:
+			const dbTransactions = [
+				createTransaction(10, [testAddress.one]),
+				createTransaction(20, [testAddress.one], 1),
+				createTransaction(30, [testAddress.one], 1, testPublicKey.one),
+				createTransaction(40, [testAddress.one], 1, testPublicKey.one, testAddress.one),
+				createTransaction(50, [testAddress.one], 1, testPublicKey.one, testAddress.one, EntityType.transfer)
+			];
+
+			const filters = {
+				height: 1,
+				signerPublicKey: testPublicKey.one,
+				recipientAddress: testAddress.one,
+				transactionTypes: [EntityType.transfer]
+			};
+
+			// Act + Assert:
+			return runDbTest(
+				{ transactions: dbTransactions },
+				db => db.transactions(filters, {}),
+				transactionsPage => {
+					expect(transactionsPage.data.length).to.equal(1);
+					const expectedIds = [createObjectId(50)];
+					const returnedIds = transactionsPage.data.map(t => t.id);
+					expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
+				}
+			);
+		});
+
+		describe('correctly applies each filter:', () => {
 			it('height', () => {
 				// Arrange:
 				const dbTransactions = [
@@ -1925,20 +1991,20 @@ describe('catapult db', () => {
 				// Arrange:
 				const dbTransactions = [
 					// Non aggregate
-					createTransaction(createObjectId(10), [], 1, testPublicKey.one),
-					createTransaction(createObjectId(20), [], 1, testPublicKey.two),
+					createTransaction(10, [], 1, testPublicKey.one),
+					createTransaction(20, [], 1, testPublicKey.two),
 
 					// Aggregate
-					createTransaction(createObjectId(30), [], 1, testPublicKey.one),
-					createInnerTransaction(createObjectId(100), createObjectId(30), testPublicKey.two),
-					createInnerTransaction(createObjectId(200), createObjectId(30), testPublicKey.two),
+					createTransaction(30, [], 1, testPublicKey.one),
+					createInnerTransaction(100, 30, testPublicKey.two),
+					createInnerTransaction(200, 30, testPublicKey.two),
 
-					createTransaction(createObjectId(40), [], 1, testPublicKey.two),
-					createInnerTransaction(createObjectId(300), createObjectId(40), testPublicKey.one),
-					createInnerTransaction(createObjectId(400), createObjectId(40), testPublicKey.two),
+					createTransaction(40, [], 1, testPublicKey.two),
+					createInnerTransaction(300, 40, testPublicKey.one),
+					createInnerTransaction(400, 40, testPublicKey.two),
 
-					createTransaction(createObjectId(50), [], 1, testPublicKey.two),
-					createInnerTransaction(createObjectId(500), createObjectId(50), testPublicKey.two)
+					createTransaction(50, [], 1, testPublicKey.two),
+					createInnerTransaction(500, 50, testPublicKey.two)
 				];
 
 				const filters = { signerPublicKey: testPublicKey.one };
@@ -1948,8 +2014,8 @@ describe('catapult db', () => {
 					{ transactions: dbTransactions },
 					db => db.transactions(filters, {}),
 					transactionsPage => {
-						expect(transactionsPage.data.length).to.equal(3);
-						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(300)];
+						expect(transactionsPage.data.length).to.equal(4);
+						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(40), createObjectId(300)];
 						const returnedIds = transactionsPage.data.map(t => t.id);
 						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
 					}
@@ -1960,20 +2026,20 @@ describe('catapult db', () => {
 				// Arrange:
 				const dbTransactions = [
 					// Non aggregate
-					createTransaction(createObjectId(10), [], 1, 0, testAddress.one),
-					createTransaction(createObjectId(20), [], 1, 0, testAddress.two),
+					createTransaction(10, [], 1, 0, testAddress.one),
+					createTransaction(20, [], 1, 0, testAddress.two),
 
 					// Aggregate
-					createTransaction(createObjectId(30), [], 1, 0, testAddress.one),
-					createInnerTransaction(createObjectId(100), createObjectId(30), 0, testAddress.two),
-					createInnerTransaction(createObjectId(200), createObjectId(30), 0, testAddress.two),
+					createTransaction(30, [], 1, 0, testAddress.one),
+					createInnerTransaction(100, 30, 0, testAddress.two),
+					createInnerTransaction(200, 30, 0, testAddress.two),
 
-					createTransaction(createObjectId(40), [], 1, 0, testAddress.two),
-					createInnerTransaction(createObjectId(300), createObjectId(40), 0, testAddress.one),
-					createInnerTransaction(createObjectId(400), createObjectId(40), 0, testAddress.two),
+					createTransaction(40, [], 1, 0, testAddress.two),
+					createInnerTransaction(300, 40, 0, testAddress.one),
+					createInnerTransaction(400, 40, 0, testAddress.two),
 
-					createTransaction(createObjectId(50), [], 1, 0, testAddress.two),
-					createInnerTransaction(createObjectId(500), createObjectId(50), 0, testAddress.two)
+					createTransaction(50, [], 1, 0, testAddress.two),
+					createInnerTransaction(500, 50, 0, testAddress.two)
 				];
 
 				const filters = { recipientAddress: testAddress.one };
@@ -1983,8 +2049,8 @@ describe('catapult db', () => {
 					{ transactions: dbTransactions },
 					db => db.transactions(filters, {}),
 					transactionsPage => {
-						expect(transactionsPage.data.length).to.equal(3);
-						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(300)];
+						expect(transactionsPage.data.length).to.equal(4);
+						const expectedIds = [createObjectId(10), createObjectId(30), createObjectId(40), createObjectId(300)];
 						const returnedIds = transactionsPage.data.map(t => t.id);
 						expect(returnedIds.sort()).to.deep.equal(expectedIds.sort());
 					}
