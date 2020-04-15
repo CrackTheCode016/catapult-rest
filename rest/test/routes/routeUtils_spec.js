@@ -251,6 +251,118 @@ describe('route utils', () => {
 		});
 	});
 
+	describe('parse pagination arguments', () => {
+		const defaultPageSize = 10; // not sure if this must be read from settings
+
+		it('succeeds when no arguments are provided', () => {
+			// Act:
+			const options = routeUtils.parsePaginationArguments({});
+
+			// Assert:
+			expect(options).to.deep.equal({
+				pageSize: defaultPageSize,
+				pageNumber: 1,
+				sortField: 'id',
+				sortDirection: 1
+			});
+		});
+
+		it('succeeds when valid page size is provided', () => {
+			// Act:
+			const options = routeUtils.parsePaginationArguments({ pageSize: '12' });
+
+			// Assert:
+			expect(options).to.deep.equal({
+				pageSize: 12,
+				pageNumber: 1,
+				sortField: 'id',
+				sortDirection: 1
+			});
+		});
+
+		it('succeeds when valid page number is provided', () => {
+			// Act:
+			const options = routeUtils.parsePaginationArguments({ pageNumber: '5' });
+
+			// Assert:
+			expect(options).to.deep.equal({
+				pageSize: defaultPageSize,
+				pageNumber: 5,
+				sortField: 'id',
+				sortDirection: 1
+			});
+		});
+
+		it('succeeds when valid sort field is provided', () => {
+			// Act:
+			const options = routeUtils.parsePaginationArguments({ sortField: 'hash' });
+
+			// Assert:
+			expect(options).to.deep.equal({
+				pageSize: defaultPageSize,
+				pageNumber: 1,
+				sortField: 'hash',
+				sortDirection: 1
+			});
+		});
+
+		it('succeeds when valid sort direction is provided', () => {
+			// Act:
+			const options = routeUtils.parsePaginationArguments({ sortDirection: 'desc' });
+
+			// Assert:
+			expect(options).to.deep.equal({
+				pageSize: defaultPageSize,
+				pageNumber: 1,
+				sortField: 'id',
+				sortDirection: -1
+			});
+		});
+
+		it('succeeds when valid page size and page number are provided', () => {
+			// Act:
+			const options = routeUtils.parsePaginationArguments({ pageSize: '12', pageNumber: '5' });
+
+			// Assert:
+			expect(options).to.deep.equal({
+				pageSize: 12,
+				pageNumber: 5,
+				sortField: 'id',
+				sortDirection: 1
+			});
+		});
+
+		it('succeeds when valid page size, page number, sort field and sort direction are provided', () => {
+			// Act:
+			const options = routeUtils.parsePaginationArguments({
+				pageSize: '12',
+				pageNumber: '5',
+				sortField: 'signerPublicKey',
+				sortDirection: 'desc'
+			});
+
+			// Assert:
+			expect(options).to.deep.equal({
+				pageSize: 12,
+				pageNumber: 5,
+				sortField: 'signerPublicKey',
+				sortDirection: -1
+			});
+		});
+
+		it('fails when invalid page size is provided', () => {
+			// Act:
+			expect(() => routeUtils.parsePaginationArguments({ pageSize: '1Y2' }))
+				.to.throw('pageSize is not a valid unsigned integer');
+		});
+
+		it('fails when invalid page number is provided', () => {
+			// Act:
+			expect(() => routeUtils.parsePaginationArguments({ pageNumber: '12aa' }))
+				.to.throw('pageNumber is not a valid unsigned integer');
+		});
+	});
+
 	describe('sender', () => {
 		const sendTest = (sender, assertResponse) => {
 			// Arrange: set up the route params
