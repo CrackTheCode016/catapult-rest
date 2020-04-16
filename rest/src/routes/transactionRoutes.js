@@ -72,22 +72,24 @@ module.exports = {
 		);
 
 		server.get('/transactions', (req, res, next) => {
-			if (req.params.address && (req.params.signerPublicKey || req.params.recipientAddress))
+			const { params } = req;
+
+			if (params.address && (params.signerPublicKey || params.recipientAddress))
 				throw Error('can\'t filter by address if signerPublicKey or recipientAddress are already provided');
 
-			if (req.params.state && !['confirmed', 'unconfirmed', 'partial'].includes(req.params.state))
+			if (params.state && !['confirmed', 'unconfirmed', 'partial'].includes(params.state))
 				throw Error('invalid transaction state provided');
 
 			const filters = {
-				height: req.params.height ? parseHeight(req.params) : undefined,
-				address: req.params.height ? routeUtils.parseArgument(req.params, 'address', 'address') : undefined,
-				signerPublicKey: req.params.height ? routeUtils.parseArgument(req.params, 'signerPublicKey', 'publicKey') : undefined,
-				recipientAddress: req.params.height ? routeUtils.parseArgument(req.params, 'recipientAddress', 'address') : undefined,
-				transactionTypes: req.params.type ? routeUtils.parseArgumentAsArray(req.params, 'type', 'uint') : undefined,
-				state: req.params.state
+				height: params.height ? parseHeight(params) : undefined,
+				address: params.address ? routeUtils.parseArgument(params, 'address', 'address') : undefined,
+				signerPublicKey: params.signerPublicKey ? routeUtils.parseArgument(params, 'signerPublicKey', 'publicKey') : undefined,
+				recipientAddress: params.recipientAddress ? routeUtils.parseArgument(params, 'recipientAddress', 'address') : undefined,
+				transactionTypes: params.type ? routeUtils.parseArgumentAsArray(params, 'type', 'uint') : undefined,
+				state: params.state
 			};
 
-			const options = routeUtils.parsePaginationArguments(req.params);
+			const options = routeUtils.parsePaginationArguments(params);
 
 			return db.transactions(filters, options)
 				.then(result => routeUtils.createSender(routeResultTypes.transaction).sendPage(res, next)(result));
