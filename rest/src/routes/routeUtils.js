@@ -150,19 +150,22 @@ const routeUtils = {
 	},
 
 	parsePaginationArguments: args => {
+		const defaultPageSize = 10 + 1; // TODO get from settings / db / utils...
+		const defaultPageNumber = 1; // TODO get from settings / db / utils...
+
 		const parsedOptions = {
-			pageSize: args.pageSize,
-			pageNumber: args.pageNumber,
-			sortField: 'id',
+			pageSize: undefined,
+			pageNumber: undefined,
+			sortField: args.sortField || 'id',
 			sortDirection: 'desc' === args.order ? -1 : 1
 		};
 
-		parsedOptions.parsedPageSize = convert.tryParseUint();
-		if (!parsedOptions.parsedPageSize)
+		parsedOptions.pageSize = undefined !== args.pageSize ? convert.tryParseUint(args.pageSize) : defaultPageSize;
+		if (!parsedOptions.pageSize)
 			throw errors.createInvalidArgumentError('pageSize is not a valid unsigned integer');
 
-		parsedOptions.parsedPageNumber = convert.tryParseUint();
-		if (!parsedOptions.parsedPageNumber)
+		parsedOptions.pageNumber = undefined !== args.pageNumber ? convert.tryParseUint(args.pageNumber) : defaultPageNumber;
+		if (!parsedOptions.pageNumber)
 			throw errors.createInvalidArgumentError('pageNumber is not a valid unsigned integer');
 
 		return parsedOptions;
