@@ -33,6 +33,12 @@ const { Long, Binary } = MongoDb;
 const Mijin_Test_Network = testDbOptions.networkId;
 const Default_Height = 34567;
 
+const DefaultPagingOptions = {
+	pageSizeMin: 10,
+	pageSizeMax: 100,
+	pageSizeDefault: 20
+};
+
 describe('catapult db', () => {
 	const deleteIds = dbEntities => {
 		test.collection.names.forEach(collectionName => {
@@ -45,7 +51,7 @@ describe('catapult db', () => {
 
 	const runDbTest = (dbEntities, issueDbCommand, assertDbCommandResult) => {
 		// Arrange:
-		const db = new CatapultDb({ networkId: Mijin_Test_Network });
+		const db = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions));
 
 		// Act + Assert:
 		return db.connect(testDbOptions.url, 'test')
@@ -58,7 +64,7 @@ describe('catapult db', () => {
 
 	const runDbTestWithQueryTransactionsSpy = (dbEntities, issueDbCommand, expectedParams) => {
 		// Arrange:
-		const db = new CatapultDb({ networkId: Mijin_Test_Network });
+		const db = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions));
 		const queryTransactionsSpy = sinon.spy(db, 'queryTransactions');
 
 		// Act + Assert:
@@ -454,7 +460,7 @@ describe('catapult db', () => {
 
 		it('calls queryPagedDocuments with correct params', () => {
 			// Arrange:
-			const db = new CatapultDb({ networkId: Mijin_Test_Network });
+			const db = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions));
 			const queryPagedDocumentsSpy = sinon.spy(db, 'queryPagedDocuments');
 
 			const blockDbEntities = [createBlock(1, 0x0100)];
@@ -1020,7 +1026,7 @@ describe('catapult db', () => {
 		const numToObjectId = num => `000000000000000000000000${num.toString()}`.slice(-24);
 
 		const runIncomingTransactionsDbTest = (dbEntities, accountAddress, expectedIds, types) => {
-			const db = new CatapultDb({ networkId: Mijin_Test_Network });
+			const db = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions));
 			const expectedObjectIds = expectedIds.map(numToObjectId);
 
 			return db.connect(testDbOptions.url, 'test')
@@ -1165,7 +1171,7 @@ describe('catapult db', () => {
 			describe('correctly processes pagination params', () => {
 				it('calls queryTransactions with correct pagination params', () => {
 					// Arrange:
-					const db = new CatapultDb({ networkId: Mijin_Test_Network });
+					const db = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions));
 					const queryTransactionsSpy = sinon.spy(db, 'queryTransactions');
 
 					// Act + Assert:
@@ -1512,12 +1518,12 @@ describe('catapult db', () => {
 		it('query respects page size', () => runPageSizeTests(50, 25, 25));
 
 		it('query ensures minimum page size', () => {
-			const minPageSize = new CatapultDb({ networkId: Mijin_Test_Network }).pagingOptions.pageSizeMin;
+			const minPageSize = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions)).pagingOptions.pageSizeMin;
 			return runPageSizeTests(minPageSize + 5, minPageSize - 1, minPageSize);
 		});
 
 		it('query ensures maximum page size', () => {
-			const maxPageSize = new CatapultDb({ networkId: Mijin_Test_Network }).pagingOptions.pageSizeMax;
+			const maxPageSize = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions)).pagingOptions.pageSizeMax;
 			return runPageSizeTests(maxPageSize + 5, maxPageSize + 1, maxPageSize);
 		});
 	});
@@ -1733,7 +1739,7 @@ describe('catapult db', () => {
 		});
 
 		describe('options', () => {
-			const testDb = new CatapultDb({ networkId: Mijin_Test_Network });
+			const testDb = new CatapultDb(Object.assign({ networkId: Mijin_Test_Network }, DefaultPagingOptions));
 			const { pageSizeMax, pageSizeMin, pageSizeDefault } = testDb.pagingOptions;
 
 			const blocks = numBlocks => {

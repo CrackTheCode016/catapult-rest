@@ -97,9 +97,9 @@ class CatapultDb {
 			throw Error('network id is required');
 
 		this.pagingOptions = {
-			pageSizeMin: options.pageSizeMin || 10,
-			pageSizeMax: options.pageSizeMax || 100,
-			pageSizeDefault: options.pageSizeDefault || 20
+			pageSizeMin: options.pageSizeMin,
+			pageSizeMax: options.pageSizeMax,
+			pageSizeDefault: options.pageSizeDefault
 		};
 		this.sanitizer = createSanitizer();
 	}
@@ -323,7 +323,7 @@ class CatapultDb {
 
 		conditions.push(sortConditions);
 
-		const pageSize = getBoundedPageSize(options.pageSize, this.pagingOptions);
+		const pageSize = options.pageSize;
 		const pageIndex = options.pageNumber - 1;
 
 		const facet = [

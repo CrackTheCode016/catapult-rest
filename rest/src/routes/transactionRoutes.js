@@ -89,7 +89,7 @@ module.exports = {
 				state: params.state
 			};
 
-			const options = routeUtils.parsePaginationArguments(params);
+			const options = routeUtils.parsePaginationArguments(params, services.config.pageSize);
 
 			return db.transactions(filters, options)
 				.then(result => routeUtils.createSender(routeResultTypes.transaction).sendPage(res, next)(result));

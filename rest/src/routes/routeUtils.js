@@ -86,6 +86,9 @@ const namedParserMap = {
 	}
 };
 
+const getBoundedPageSize = (pageSize, optionsPageSize) =>
+	Math.max(optionsPageSize.min, Math.min(optionsPageSize.max, pageSize || optionsPageSize.default));
+
 const routeUtils = {
 	/**
 	 * Parses an argument and throws an invalid argument error if it is invalid.
@@ -149,26 +152,34 @@ const routeUtils = {
 		return parsedOptions;
 	},
 
-	parsePaginationArguments: args => {
-		const defaultPageSize = 10 + 1; // TODO get from settings / db / utils...
-		const defaultPageNumber = 1; // TODO get from settings / db / utils...
-
-		const parsedOptions = {
-			pageSize: undefined,
-			pageNumber: undefined,
+	parsePaginationArguments: (args, optionsPageSize) => {
+		const parsedArgs = {
 			sortField: args.sortField || 'id',
 			sortDirection: 'desc' === args.order ? -1 : 1
 		};
 
-		parsedOptions.pageSize = undefined !== args.pageSize ? convert.tryParseUint(args.pageSize) : defaultPageSize;
-		if (!parsedOptions.pageSize)
-			throw errors.createInvalidArgumentError('pageSize is not a valid unsigned integer');
+		if (args.pageSize) {
+			const numericPageSize = convert.tryParseUint(args.pageSize);
+			if (undefined === numericPageSize)
+				throw errors.createInvalidArgumentError('pageSize is not a valid unsigned integer');
 
-		parsedOptions.pageNumber = undefined !== args.pageNumber ? convert.tryParseUint(args.pageNumber) : defaultPageNumber;
-		if (!parsedOptions.pageNumber)
-			throw errors.createInvalidArgumentError('pageNumber is not a valid unsigned integer');
+			parsedArgs.pagSize = getBoundedPageSize(numericPageSize, optionsPageSize);
+		}
+		else {
+			parsedArgs.pageSize = optionsPageSize.default;
+		}
 
-		return parsedOptions;
+
+		if (args.pageNumber) {
+			const numericPageNumber = convert.tryParseUint(args.pageNumber);
+			if (undefined === numericPageNumber)
+				throw errors.createInvalidArgumentError('pageNumber is not a valid unsigned integer');
+
+			parsedArgs.pageNumber = numericPageNumber;
+		}
+		parsedArgs.pageNumber = 0 < parsedArgs.pageNumber ? parsedArgs.pageNumber : 1;
+
+		return parsedArgs;
 	},
 
 	/**
